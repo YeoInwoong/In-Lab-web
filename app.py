@@ -1,4 +1,11 @@
 import streamlit as st
+import requests
+from rdkit import Chem
+from rdkit.Chem import Draw
+import tempfile
+from PIL import Image
+import pytesseract
+import os
 
 reaction_db = {
     "Suzuki coupling": {
@@ -57,5 +64,58 @@ if st.button("조건 추천 받기"):
 
         st.subheader("⚙️ 반응 메커니즘")
         st.markdown(info.get("메커니즘", "메커니즘 정보 없음"))
+
+        st.subheader("📚 관련 논문 검색 결과")
+        try:
+            url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={reaction_name}&limit=3&fields=title,authors,url,year"
+            response = requests.get(url)
+            if response.status_code == 200:
+                papers = response.json().get("data", [])
+                if papers:
+                    for paper in papers:
+                        st.markdown(f"- **{paper['title']}** ({paper['year']})")
+                        st.markdown(f"  - [🔗 링크]({paper['url']})")
+                else:
+                    st.info("논문 검색 결과가 없습니다.")
+            else:
+                st.warning("논문 검색 중 오류가 발생했습니다.")
+        except Exception as e:
+            st.error(f"논문 검색 실패: {e}")
     else:
         st.error("등록되지 않은 반응입니다.")
+
+st.markdown("---")
+st.header("🧬 구조 이미지 업로드 → SMILES 변환 및 문헌 추천")
+
+uploaded_file = st.file_uploader("화합물 구조 이미지를 업로드하세요 (PNG, JPG 등)", type=["png", "jpg", "jpeg"])
+
+if uploaded_file:
+    try:
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_file.write(uploaded_file.read())
+        temp_file_path = temp_file.name
+        st.image(Image.open(temp_file_path), caption="업로드한 구조 이미지", use_column_width=True)
+
+        st.subheader("🧪 이미지 속 텍스트 OCR 인식 결과")
+        text_result = pytesseract.image_to_string(Image.open(temp_file_path))
+        st.code(text_result)
+
+        st.subheader("📚 구조 관련 논문 검색 (키워드 기반)")
+        try:
+            keyword = text_result.strip().split("\n")[0]  # 첫 줄 키워드로 사용
+            url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={keyword}&limit=3&fields=title,authors,url,year"
+            response = requests.get(url)
+            if response.status_code == 200:
+                papers = response.json().get("data", [])
+                if papers:
+                    for paper in papers:
+                        st.markdown(f"- **{paper['title']}** ({paper['year']})")
+                        st.markdown(f"  - [🔗 링크]({paper['url']})")
+                else:
+                    st.info("논문 검색 결과가 없습니다.")
+            else:
+                st.warning("논문 검색 중 오류가 발생했습니다.")
+        except Exception as e:
+            st.error(f"논문 검색 실패: {e}")
+    except Exception as e:
+        st.error(f"이미지 처리 중 오류 발생: {e}")
