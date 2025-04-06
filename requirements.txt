@@ -1,1 +1,5 @@
 streamlit
+rdkit
+pillow
+pytesseract
+requests
